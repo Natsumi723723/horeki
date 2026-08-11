@@ -48,9 +48,17 @@ export default function App() {
         ) : tab === "map" ? (
           <MapScreen rec={rec} onFinished={handleFinished} />
         ) : tab === "record" ? (
-          <RecordScreen reloadKey={reloadKey} onOpen={setDetailId} />
+          <RecordScreen
+            reloadKey={reloadKey}
+            onOpen={setDetailId}
+            onChanged={bump}
+          />
         ) : tab === "explore" ? (
-          <ExploreScreen current={rec.current} />
+          <ExploreScreen
+            current={rec.current}
+            activeWalkId={rec.status === "idle" ? null : rec.walkId}
+            onCheckin={bump}
+          />
         ) : (
           <MyMapScreen reloadKey={reloadKey} current={rec.current} />
         )}

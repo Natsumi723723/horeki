@@ -12,6 +12,7 @@ import { totalDistance, elevationGain, dayKey } from "./geo.js";
 const STORE_WALKS = "walks"; // 歩行記録のメタ情報（一覧表示用・軽い）
 const STORE_TRACKS = "tracks"; // GPS 点列（重いので別ストア）
 const STORE_META = "meta"; // 記録中の状態など、単発の値
+const STORE_CHECKINS = "checkins"; // 訪れた場所の記録（何時に、どこで）
 
 let dbPromise = null;
 
@@ -28,6 +29,13 @@ function db() {
         }
         if (!d.objectStoreNames.contains(STORE_META)) {
           d.createObjectStore(STORE_META);
+        }
+        // v2 で追加。既存ストアには一切触らない（触ると過去の記録が消える）
+        if (!d.objectStoreNames.contains(STORE_CHECKINS)) {
+          const s = d.createObjectStore(STORE_CHECKINS, { keyPath: "id" });
+          s.createIndex("by-at", "at");
+          s.createIndex("by-walkId", "walkId");
+          s.createIndex("by-spotId", "spotId");
         }
       },
     });
@@ -75,7 +83,14 @@ export async function clearActiveWalk() {
  * 途中で失敗しても中途半端な記録は残らない。
  * @returns {object|null} 保存した walk。点が少なすぎる場合は null（保存しない）
  */
-export async function finishWalk({ id, startedAt, endedAt, duration, points }) {
+export async function finishWalk({
+  id,
+  startedAt,
+  endedAt,
+  duration,
+  points,
+  demo = false,
+}) {
   if (!points || points.length < 2) return null;
 
   const distance = totalDistance(points);
@@ -89,6 +104,7 @@ export async function finishWalk({ id, startedAt, endedAt, duration, points }) {
     elevGain: elevationGain(points),
     dayKey: dayKey(startedAt),
     createdAt: Date.now(),
+    demo, // デモデータかどうか。まとめて消せるようにするための印
   };
 
   const d = await db();
@@ -147,16 +163,110 @@ export async function getStats() {
   };
 }
 
+// ── デモデータ ────────────────────────────────────
+// 「実際に歩く前に、どんなアプリか見たい」ためのもの。
+// demo: true の印を付けて保存し、いつでもまとめて消せるようにしてある。
+
+export async function hasDemoData() {
+  const walks = await listWalks();
+  return walks.some((w) => w.demo);
+}
+
+export async function clearDemoData() {
+  const d = await db();
+  const walks = (await listWalks()).filter((w) => w.demo);
+  for (const w of walks) {
+    const tx = d.transaction([STORE_WALKS, STORE_TRACKS], "readwrite");
+    await Promise.all([
+      tx.objectStore(STORE_WALKS).delete(w.id),
+      tx.objectStore(STORE_TRACKS).delete(w.id),
+      tx.done,
+    ]);
+  }
+  const checkins = (await listCheckins()).filter((c) => c.demo);
+  for (const c of checkins) await d.delete(STORE_CHECKINS, c.id);
+  return { walks: walks.length, checkins: checkins.length };
+}
+
+// ── チェックイン（訪れた場所） ────────────────────
+
+/**
+ * スポットにチェックインする。「何時にここに居た」を残すのが目的。
+ * 歩行記録中なら walkId が入り、その日の記録の詳細に並ぶ。
+ * @returns {object} 追加したチェックイン
+ */
+export async function addCheckin(
+  spot,
+  { walkId = null, at = Date.now(), demo = false } = {}
+) {
+  const rec = {
+    demo,
+    id: newId(),
+    spotId: spot.id,
+    name: spot.name,
+    category: spot.category,
+    lat: spot.lat,
+    lng: spot.lng,
+    description: spot.description || null,
+    imageUrl: spot.imageUrl || null,
+    wikipediaUrl: spot.wikipediaUrl || null,
+    // 写真をあとから引けるように、記事名も一緒に残しておく
+    wikipediaTitle: spot.wikipediaTitle || null,
+    wikipediaLang: spot.wikipediaLang || null,
+    walkId,
+    at,
+    dayKey: dayKey(at),
+  };
+  const d = await db();
+  await d.put(STORE_CHECKINS, rec);
+  return rec;
+}
+
+/** 新しい順の全チェックイン */
+export async function listCheckins() {
+  const d = await db();
+  const all = await d.getAllFromIndex(STORE_CHECKINS, "by-at");
+  return all.reverse();
+}
+
+/** その歩行中に訪れた場所（訪れた順） */
+export async function checkinsForWalk(walkId) {
+  const d = await db();
+  const all = await d.getAllFromIndex(STORE_CHECKINS, "by-walkId", walkId);
+  return all.sort((a, b) => a.at - b.at);
+}
+
+/**
+ * スポットIDごとの最終訪問時刻。
+ * EXPLORE 一覧で「訪問済み」を出すために、まとめて引けるようにしてある。
+ * @returns {Map<string, number>}
+ */
+export async function lastVisitBySpot() {
+  const all = await listCheckins();
+  const m = new Map();
+  for (const c of all) {
+    if (!m.has(c.spotId)) m.set(c.spotId, c.at); // listCheckins は新しい順
+  }
+  return m;
+}
+
+export async function deleteCheckin(id) {
+  const d = await db();
+  await d.delete(STORE_CHECKINS, id);
+}
+
 /** 全記録を JSON で書き出す（バックアップ）。将来のクラウド同期の下地でもある。 */
 export async function exportAll() {
   const walks = await listWalks();
   const tracks = await getAllTracks();
+  const checkins = await listCheckins();
   return {
     app: "horeki",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     walks,
     tracks,
+    checkins,
   };
 }
 
@@ -181,5 +291,15 @@ export async function importAll(data) {
     ]);
     added++;
   }
-  return { added, skipped: data.walks.length - added };
+
+  // チェックインも取り込む（同 id はスキップ）
+  const existingCheckins = new Set((await listCheckins()).map((c) => c.id));
+  let addedCheckins = 0;
+  for (const c of data.checkins || []) {
+    if (!c?.id || existingCheckins.has(c.id)) continue;
+    await d.put(STORE_CHECKINS, c);
+    addedCheckins++;
+  }
+
+  return { added, skipped: data.walks.length - added, addedCheckins };
 }

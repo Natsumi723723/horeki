@@ -5,7 +5,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapView from "./MapView.jsx";
 import { CATEGORIES, fetchNearbySpots, clearSpotsCache } from "./spots.js";
-import { formatDistance, boundsOf } from "./geo.js";
+import { formatDistance, boundsOf, formatTime, formatDate } from "./geo.js";
+import { addCheckin, lastVisitBySpot } from "./db.js";
+import SpotImage from "./SpotImage.jsx";
 
 const RADIUS_OPTIONS = [
   { label: "500m", value: 500 },
@@ -13,7 +15,7 @@ const RADIUS_OPTIONS = [
   { label: "2km", value: 2000 },
 ];
 
-export default function ExploreScreen({ current }) {
+export default function ExploreScreen({ current, activeWalkId, onCheckin }) {
   const [spots, setSpots] = useState([]);
   const [source, setSource] = useState(null);
   // 取得したときの現在地。地図の表示範囲はこれを基準に固定する
@@ -25,8 +27,24 @@ export default function ExploreScreen({ current }) {
   const [radius, setRadius] = useState(1000);
   const [view, setView] = useState("list"); // list | map
   const [selected, setSelected] = useState(null);
+  const [visits, setVisits] = useState(new Map()); // spotId → 最終訪問時刻
   const abortRef = useRef(null);
   const fetchedFor = useRef(null);
+
+  useEffect(() => {
+    lastVisitBySpot().then(setVisits);
+  }, []);
+
+  /** 意図的にチェックインする。記録中なら、その日の歩行記録に紐づく。 */
+  const checkin = useCallback(
+    async (spot) => {
+      const at = Date.now();
+      await addCheckin(spot, { walkId: activeWalkId || null, at });
+      setVisits((m) => new Map(m).set(spot.id, at));
+      onCheckin?.();
+    },
+    [activeWalkId, onCheckin]
+  );
 
   const load = useCallback(
     async (lat, lng, r, { fresh = false } = {}) => {
@@ -192,17 +210,23 @@ export default function ExploreScreen({ current }) {
         </div>
       )}
 
-      {!loading && error && (
-        <div className="banner banner-warn" style={{ marginBottom: 12 }}>
-          <span>⚠</span>
-          <span>{error}</span>
-        </div>
-      )}
-
-      {!loading && !error && source === "sample" && (
-        <div className="banner" style={{ marginBottom: 12 }}>
-          <span>ℹ</span>
-          <span>サンプルデータを表示しています。</span>
+      {!loading && (error || source === "sample") && (
+        <div
+          className={`banner ${error ? "banner-warn" : ""}`}
+          style={{ marginBottom: 12 }}
+        >
+          <span>{error ? "⚠" : "ℹ"}</span>
+          <span>
+            {error}
+            {/* 取得に失敗したときは必ずサンプル表示だと伝える。
+                伝えないと、遠くのスポットが出ている理由が分からない */}
+            {source === "sample" && (
+              <>
+                {error ? <br /> : null}
+                サンプルデータを表示しています。
+              </>
+            )}
+          </span>
         </div>
       )}
     </>
@@ -258,7 +282,12 @@ export default function ExploreScreen({ current }) {
         {selected && (
           <div className="sheet-backdrop" onClick={() => setSelected(null)}>
             <div className="sheet" onClick={(e) => e.stopPropagation()}>
-              <SpotBody spot={selected} />
+              <SpotBody
+                spot={selected}
+                visitedAt={visits.get(selected.id)}
+                onCheckin={checkin}
+                withImage
+              />
               <button
                 className="btn btn-quiet"
                 style={{ width: "100%", marginTop: 16 }}
@@ -290,12 +319,10 @@ export default function ExploreScreen({ current }) {
 
       {visible.map((s) => (
         <div className="card" key={s.id} style={{ padding: 14 }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-            <span style={{ fontSize: 20, lineHeight: 1.3 }}>
-              {CATEGORIES[s.category]?.icon || "📍"}
-            </span>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <SpotImage spot={s} size={72} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <SpotBody spot={s} />
+              <SpotBody spot={s} visitedAt={visits.get(s.id)} onCheckin={checkin} />
             </div>
           </div>
         </div>
@@ -304,10 +331,26 @@ export default function ExploreScreen({ current }) {
   );
 }
 
-function SpotBody({ spot }) {
+function SpotBody({ spot, visitedAt, onCheckin, withImage = false }) {
   const cat = CATEGORIES[spot.category];
+  const [saving, setSaving] = useState(false);
+
+  const handle = async () => {
+    setSaving(true);
+    try {
+      await onCheckin?.(spot);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
+      {withImage && (
+        <div style={{ marginBottom: 12 }}>
+          <SpotImage spot={spot} size={140} rounded={12} />
+        </div>
+      )}
       <div
         style={{
           fontFamily: "var(--font-serif)",
@@ -327,8 +370,12 @@ function SpotBody({ spot }) {
           gap: 10,
         }}
       >
-        <span>{cat?.label || "スポット"}</span>
-        <span>現在地から {formatDistance(spot.distance)}</span>
+        <span>
+          {cat?.icon} {cat?.label || "スポット"}
+        </span>
+        {Number.isFinite(spot.distance) && (
+          <span>現在地から {formatDistance(spot.distance)}</span>
+        )}
       </div>
       {spot.description && (
         <p
@@ -342,22 +389,61 @@ function SpotBody({ spot }) {
           {spot.description}
         </p>
       )}
-      {spot.wikipediaUrl && (
-        <a
-          href={spot.wikipediaUrl}
-          target="_blank"
-          rel="noreferrer noopener"
+
+      {visitedAt && (
+        <div
           style={{
-            display: "inline-block",
-            marginTop: 8,
             fontSize: 12,
             color: "var(--accent)",
-            textDecorationThickness: "1px",
+            marginTop: 8,
+            letterSpacing: "0.04em",
           }}
         >
-          詳しく読む ↗
-        </a>
+          ✓ {formatDate(visitedAt)} {formatTime(visitedAt)} に訪問
+        </div>
       )}
+
+      <div
+        style={{
+          display: "flex",
+          gap: 14,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginTop: 10,
+        }}
+      >
+        {onCheckin && (
+          <button
+            className="btn btn-quiet btn-sm"
+            onClick={handle}
+            disabled={saving}
+            style={{
+              width: "auto",
+              padding: "0 16px",
+              flex: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {saving ? "…" : visitedAt ? "また来た" : "✓ チェックイン"}
+          </button>
+        )}
+        {spot.wikipediaUrl && (
+          <a
+            href={spot.wikipediaUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            style={{
+              fontSize: 12,
+              color: "var(--accent)",
+              textDecorationThickness: "1px",
+              whiteSpace: "nowrap",
+              flex: "none",
+            }}
+          >
+            詳しく読む ↗
+          </a>
+        )}
+      </div>
     </>
   );
 }

@@ -59,7 +59,11 @@ export const SAMPLE_SPOTS = [
     lat: 35.5804,
     lng: 139.6607,
     description: "かつて多摩川を渡るために利用された渡し場跡。",
-    wikipediaUrl: null,
+    // 「丸子の渡し跡」の記事は無いが「丸子の渡し」はあり、写真も付く
+    wikipediaUrl: "https://ja.wikipedia.org/wiki/%E4%B8%B8%E5%AD%90%E3%81%AE%E6%B8%A1%E3%81%97",
+    imageUrl: null,
+    wikipediaTitle: "丸子の渡し",
+    wikipediaLang: "ja",
   },
   {
     id: "sample/tamagawa-sengen",
@@ -69,6 +73,9 @@ export const SAMPLE_SPOTS = [
     lng: 139.6669,
     description: "神社。多摩川を見下ろす高台に鎮座し、富士山信仰を伝える。",
     wikipediaUrl: "https://ja.wikipedia.org/wiki/%E5%A4%9A%E6%91%A9%E5%B7%9D%E6%B5%85%E9%96%93%E7%A5%9E%E7%A4%BE",
+    imageUrl: null,
+    wikipediaTitle: "多摩川浅間神社",
+    wikipediaLang: "ja",
   },
   {
     id: "sample/kabutoyama-kofun",
@@ -77,7 +84,10 @@ export const SAMPLE_SPOTS = [
     lat: 35.5817,
     lng: 139.6673,
     description: "古墳・墓所。多摩川台公園内に残る前方後円墳。",
-    wikipediaUrl: null,
+    wikipediaUrl: "https://ja.wikipedia.org/wiki/%E4%BA%80%E7%94%B2%E5%B1%B1%E5%8F%A4%E5%A2%B3",
+    imageUrl: null,
+    wikipediaTitle: "亀甲山古墳",
+    wikipediaLang: "ja",
   },
   {
     id: "sample/kawasaki-city-museum",
@@ -86,7 +96,10 @@ export const SAMPLE_SPOTS = [
     lat: 35.5936,
     lng: 139.6547,
     description: "博物館・美術館。等々力緑地にある市民のための文化施設。",
-    wikipediaUrl: null,
+    wikipediaUrl: "https://ja.wikipedia.org/wiki/%E5%B7%9D%E5%B4%8E%E5%B8%82%E5%B8%82%E6%B0%91%E3%83%9F%E3%83%A5%E3%83%BC%E3%82%B8%E3%82%A2%E3%83%A0",
+    imageUrl: null,
+    wikipediaTitle: "川崎市市民ミュージアム",
+    wikipediaLang: "ja",
   },
   {
     id: "sample/ikegami-honmonji",
@@ -96,6 +109,9 @@ export const SAMPLE_SPOTS = [
     lng: 139.6987,
     description: "日蓮宗の寺院。日蓮聖人が入滅した地として知られる。",
     wikipediaUrl: "https://ja.wikipedia.org/wiki/%E6%B1%A0%E4%B8%8A%E6%9C%AC%E9%96%80%E5%AF%BA",
+    imageUrl: null,
+    wikipediaTitle: "池上本門寺",
+    wikipediaLang: "ja",
   },
   {
     id: "sample/tamagawadai-park",
@@ -104,7 +120,10 @@ export const SAMPLE_SPOTS = [
     lat: 35.5825,
     lng: 139.6686,
     description: "公園。多摩川沿いの丘に古墳群が点在する。",
-    wikipediaUrl: null,
+    wikipediaUrl: "https://ja.wikipedia.org/wiki/%E5%A4%9A%E6%91%A9%E5%B7%9D%E5%8F%B0%E5%85%AC%E5%9C%92",
+    imageUrl: null,
+    wikipediaTitle: "多摩川台公園",
+    wikipediaLang: "ja",
   },
   {
     id: "sample/todoroki-valley",
@@ -113,7 +132,10 @@ export const SAMPLE_SPOTS = [
     lat: 35.6046,
     lng: 139.6469,
     description: "自然保護区。23区唯一の渓谷として親しまれている。",
-    wikipediaUrl: null,
+    wikipediaUrl: "https://ja.wikipedia.org/wiki/%E7%AD%89%E3%80%85%E5%8A%9B%E6%B8%93%E8%B0%B7",
+    imageUrl: null,
+    wikipediaTitle: "等々力渓谷",
+    wikipediaLang: "ja",
   },
   {
     id: "sample/kuji-entoubunsui",
@@ -122,7 +144,10 @@ export const SAMPLE_SPOTS = [
     lat: 35.6079,
     lng: 139.6156,
     description: "二ヶ領用水の水を四方に分けた円形の分水施設。（1941年）",
-    wikipediaUrl: null,
+    wikipediaUrl: "https://ja.wikipedia.org/wiki/%E4%B9%85%E5%9C%B0%E5%86%86%E7%AD%92%E5%88%86%E6%B0%B4",
+    imageUrl: null,
+    wikipediaTitle: "久地円筒分水",
+    wikipediaLang: "ja",
   },
 ];
 
@@ -439,7 +464,119 @@ export function buildDescription(tags, category) {
 }
 
 // ---------------------------------------------------------------------------
-// 6. Wikipedia / Wikidata URL の生成（pure）
+// 6. 画像 URL の生成（pure・APIを叩かない）
+// ---------------------------------------------------------------------------
+
+/** Commons の画像直リンクを作るためのエンドポイント */
+const COMMONS_FILEPATH = "https://commons.wikimedia.org/wiki/Special:FilePath/";
+
+/** サムネイル幅。カード表示に十分で、転送量を抑えられる値 */
+const IMAGE_WIDTH = 400;
+
+/**
+ * image タグに入っていても <img> では表示できない共有ページのホスト。
+ * 実データ調査で Google フォトの共有リンクが多数見つかったが、
+ * これらは content-type が text/html で画像ではない。
+ * URL を返してしまうと Wikipedia 由来の画像を取りにいく機会を潰すので落とす。
+ */
+const NON_IMAGE_HOSTS = [
+  "photos.app.goo.gl",
+  "photos.google.com",
+  "goo.gl",
+  "flic.kr",
+  "www.flickr.com",
+  "flickr.com",
+  "www.instagram.com",
+  "instagram.com",
+  "twitter.com",
+  "x.com",
+  "www.facebook.com",
+  "facebook.com",
+];
+
+/**
+ * Commons のファイル名から画像直リンクを作る。
+ * "File:" / "ファイル:" プレフィックスは除去する。
+ * @param {string} file
+ * @returns {string|null}
+ */
+function commonsFilePath(file) {
+  const name = String(file || "")
+    .trim()
+    .replace(/^(File|Image|ファイル):/i, "")
+    .trim()
+    .replace(/ /g, "_");
+  if (!name) return null;
+  return `${COMMONS_FILEPATH}${encodeURIComponent(name)}?width=${IMAGE_WIDTH}`;
+}
+
+/** 表示できる見込みのある画像 URL か（共有ページを除外する） */
+function isRenderableImageUrl(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return !NON_IMAGE_HOSTS.includes(host);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * OSM タグから、そのまま <img src> に入れられる画像 URL を作る。
+ * API を叩かない同期の純関数。
+ *
+ * 優先順位:
+ *  1. image タグ（http は https に書き換え。Commons のファイルページ URL や
+ *     "File:Foo.jpg" 形式は直リンクへ変換する）
+ *  2. wikimedia_commons タグ（Category: は画像ではないので null）
+ *
+ * @param {Record<string,string>} tags
+ * @returns {string|null}
+ */
+export function buildImageUrl(tags) {
+  const t = tags || {};
+  const raw = (t.image || "").trim();
+
+  if (raw) {
+    // commons のファイルページ URL は画像ではないので直リンクへ変換する
+    // 例: https://commons.wikimedia.org/wiki/File:Sensoji_2023.jpg
+    const page = raw.match(
+      /^https?:\/\/commons\.wikimedia\.org\/wiki\/(?:File|ファイル):(.+)$/i
+    );
+    if (page) {
+      let name = page[1];
+      try {
+        name = decodeURIComponent(name);
+      } catch {
+        /* 壊れたエスケープはそのまま使う */
+      }
+      return commonsFilePath(name);
+    }
+
+    // 既に直リンク（Special:FilePath / upload.wikimedia.org）ならそのまま。
+    // 表示できない共有ページだった場合は null を返さず、下の
+    // wikimedia_commons へ処理を落とす（写真が出る可能性を潰さないため）。
+    if (/^https?:\/\//i.test(raw)) {
+      if (isRenderableImageUrl(raw)) {
+        // GitHub Pages は https 配信なので http のままだと mixed content で弾かれる
+        return raw.replace(/^http:\/\//i, "https://");
+      }
+    } else if (/^(File|ファイル):/i.test(raw)) {
+      // URL ではなく "File:Foo.jpg" のようなファイル名が入っているケース
+      return commonsFilePath(raw);
+    }
+  }
+
+  const commons = (t.wikimedia_commons || "").trim();
+  // Category: は画像そのものではないので使わない
+  if (commons && !/^(Category|カテゴリ):/i.test(commons)) {
+    return commonsFilePath(commons);
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// 7. Wikipedia / Wikidata URL の生成（pure）
 // ---------------------------------------------------------------------------
 
 /**
@@ -451,53 +588,70 @@ export function buildDescription(tags, category) {
  * @param {Record<string,string>} tags
  * @returns {string|null}
  */
-export function buildWikipediaUrl(tags) {
+/**
+ * wikipedia 系タグを { lang, title } に分解する。
+ * buildWikipediaUrl と fetchSpotMedia の両方から使う。
+ * @param {Record<string,string>} tags
+ * @returns {{lang: string, title: string}|null}
+ */
+export function parseWikipediaRef(tags) {
   const t = tags || {};
-
-  let lang = null;
-  let title = null;
 
   if (t.wikipedia && t.wikipedia.trim()) {
     const raw = t.wikipedia.trim();
     const idx = raw.indexOf(":");
     const maybeLang = idx > 0 ? raw.slice(0, idx) : "";
     if (idx > 0 && /^[a-z]{2,3}(-[a-z0-9-]+)?$/i.test(maybeLang)) {
-      lang = maybeLang.toLowerCase();
-      title = raw.slice(idx + 1);
-    } else {
-      lang = "ja";
-      title = raw;
+      const title = raw.slice(idx + 1).trim();
+      return title ? { lang: maybeLang.toLowerCase(), title } : null;
     }
-  } else {
-    // wikipedia:ja=... 形式
-    const key = Object.keys(t).find((k) => /^wikipedia:[a-z]{2,3}(-[a-z0-9-]+)?$/i.test(k));
-    if (key && t[key] && t[key].trim()) {
-      lang = key.slice("wikipedia:".length).toLowerCase();
-      title = t[key].trim();
-    }
+    return { lang: "ja", title: raw };
   }
 
-  if (title && title.trim()) {
-    const path = encodeURIComponent(title.trim().replace(/ /g, "_"));
-    return `https://${lang}.wikipedia.org/wiki/${path}`;
-  }
-
-  // Wikidata へのフォールバック
-  const qid = (t.wikidata || "").trim();
-  if (/^Q\d+$/.test(qid)) {
-    return `https://www.wikidata.org/wiki/${qid}`;
+  // wikipedia:ja=... 形式
+  const key = Object.keys(t).find((k) => /^wikipedia:[a-z]{2,3}(-[a-z0-9-]+)?$/i.test(k));
+  if (key && t[key] && t[key].trim()) {
+    return { lang: key.slice("wikipedia:".length).toLowerCase(), title: t[key].trim() };
   }
 
   return null;
 }
 
+/**
+ * wikidata タグから QID を取り出す。
+ * @param {Record<string,string>} tags
+ * @returns {string|null}
+ */
+export function parseWikidataId(tags) {
+  const qid = ((tags || {}).wikidata || "").trim();
+  return /^Q\d+$/.test(qid) ? qid : null;
+}
+
+export function buildWikipediaUrl(tags) {
+  const ref = parseWikipediaRef(tags);
+
+  if (ref) {
+    const path = encodeURIComponent(ref.title.replace(/ /g, "_"));
+    return `https://${ref.lang}.wikipedia.org/wiki/${path}`;
+  }
+
+  // Wikidata へのフォールバック
+  const qid = parseWikidataId(tags);
+  return qid ? `https://www.wikidata.org/wiki/${qid}` : null;
+}
+
 // ---------------------------------------------------------------------------
-// 7. Overpass クエリの組み立て（pure）
+// 8. Overpass クエリの組み立て（pure）
 // ---------------------------------------------------------------------------
 
 /**
  * 指定地点まわりの「歴史・文化」系 OSM 要素を取る Overpass QL を作る。
  * node / way / relation すべてを対象にし、out center で中心座標を得る。
+ *
+ * out に件数上限を付けないのは意図的。上限を付けると Overpass は
+ * 「距離が近い順」ではなく任意の順で切ってしまうため、呼ぶたびに結果が変わり、
+ * 浅草寺や雷門のような主要スポットが不定期に消える（実測で確認済み）。
+ * 範囲は radius で絞れており、最も重い浅草 radius=1500 でも 644件・152KB 程度。
  */
 export function buildOverpassQuery(lat, lng, radius) {
   const r = Math.round(radius);
@@ -511,11 +665,11 @@ export function buildOverpassQuery(lat, lng, radius) {
   nwr["leisure"~"^(park|garden)$"](around:${at});
   nwr["natural"="tree"]["name"](around:${at});
 );
-out tags center 300;`;
+out tags center;`;
 }
 
 // ---------------------------------------------------------------------------
-// 8. Overpass レスポンスの正規化（pure）
+// 9. Overpass レスポンスの正規化（pure）
 // ---------------------------------------------------------------------------
 
 /** 要素の中心座標を取り出す（node は lat/lon、way/relation は center） */
@@ -557,6 +711,7 @@ export function normalizeElements(elements, lat, lng) {
     if (!coords) continue;
 
     const category = classifySpot(tags);
+    const ref = parseWikipediaRef(tags);
     spots.push({
       id: `${el.type}/${el.id}`,
       name,
@@ -566,6 +721,10 @@ export function normalizeElements(elements, lat, lng) {
       distance: Math.round(haversine(lat, lng, coords.lat, coords.lng)),
       description: buildDescription(tags, category),
       wikipediaUrl: buildWikipediaUrl(tags),
+      // 写真まわり（fetchSpotMedia が使う）
+      imageUrl: buildImageUrl(tags),
+      wikipediaTitle: ref ? ref.title : null,
+      wikipediaLang: ref ? ref.lang : null,
     });
   }
 
@@ -623,7 +782,7 @@ function dedupe(sortedSpots) {
 }
 
 // ---------------------------------------------------------------------------
-// 9. サンプルデータのフォールバック（pure）
+// 10. サンプルデータのフォールバック（pure）
 // ---------------------------------------------------------------------------
 
 /**
@@ -638,7 +797,7 @@ export function sampleSpotsFrom(lat, lng) {
 }
 
 // ---------------------------------------------------------------------------
-// 10. fetch まわり（signal 合成・タイムアウト）
+// 11. fetch まわり（signal 合成・タイムアウト）
 // ---------------------------------------------------------------------------
 
 /** abort 由来のエラーかどうか */
@@ -721,7 +880,7 @@ function userMessageFor(err) {
 }
 
 // ---------------------------------------------------------------------------
-// 11. キャッシュ
+// 12. スポットのキャッシュ
 // ---------------------------------------------------------------------------
 
 /** 直近の取得結果（メモリ内・1件のみ保持） */
@@ -748,7 +907,7 @@ function rehydrate(spots, lat, lng) {
 }
 
 // ---------------------------------------------------------------------------
-// 12. メイン関数
+// 13. メイン関数
 // ---------------------------------------------------------------------------
 
 /**
@@ -813,4 +972,168 @@ export async function fetchNearbySpots(
   const error = userMessageFor(lastError);
   cache = { lat, lng, radius, at: Date.now(), spots: SAMPLE_SPOTS, source: "sample", error };
   return { spots, source: "sample", error };
+}
+
+// ---------------------------------------------------------------------------
+// 14. スポットの写真・要約の取得（Wikipedia / Wikidata・APIキー不要）
+// ---------------------------------------------------------------------------
+
+const MEDIA_TIMEOUT_MS = 6000;
+
+/** 一時的な失敗（429・5xx・通信断）を再試行するまでの待ち時間 */
+const MEDIA_RETRY_COOLDOWN_MS = 60 * 1000;
+
+/**
+ * スポットごとの取得結果。キーは spot.id。
+ * 値は { imageUrl, extract, source, retryAt }。
+ * retryAt が無ければ恒久的な結果（成功 or 記事なし）で、二度と取りにいかない。
+ */
+const mediaCache = new Map();
+
+/** 写真・要約のキャッシュを破棄する */
+export function clearMediaCache() {
+  mediaCache.clear();
+}
+
+/** 画像なしの戻り値 */
+const EMPTY_MEDIA = { imageUrl: null, extract: null, source: null };
+
+/** wikipediaUrl から言語とタイトルを復元する（wikipediaTitle が無い spot 用） */
+function refFromWikipediaUrl(url) {
+  if (!url) return null;
+  const m = String(url).match(/^https?:\/\/([a-z-]+)\.wikipedia\.org\/wiki\/(.+)$/i);
+  if (!m) return null;
+  try {
+    return { lang: m[1].toLowerCase(), title: decodeURIComponent(m[2]).replace(/_/g, " ") };
+  } catch {
+    return null;
+  }
+}
+
+/** wikipediaUrl が wikidata を指している場合に QID を取り出す */
+function qidFromUrl(url) {
+  const m = String(url || "").match(/^https?:\/\/www\.wikidata\.org\/wiki\/(Q\d+)$/i);
+  return m ? m[1] : null;
+}
+
+/** タイムアウト付きの GET。失敗時は status 付きの例外を投げる。 */
+async function getJson(url, externalSignal) {
+  const { signal, cleanup } = makeCombinedSignal(externalSignal, MEDIA_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
+      signal,
+    });
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return await res.json();
+  } finally {
+    cleanup();
+  }
+}
+
+/**
+ * Wikipedia REST API のサマリから画像と要約を取る。
+ * キー不要・CORS 許可済み（Access-Control-Allow-Origin: *）。
+ */
+async function fetchWikipediaSummary(lang, title, signal) {
+  const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
+    title.replace(/ /g, "_")
+  )}`;
+  const json = await getJson(url, signal);
+
+  // 曖昧さ回避ページは中身が無いので画像も要約も使わない
+  if (json.type === "disambiguation") return { imageUrl: null, extract: null };
+
+  return {
+    imageUrl: json.thumbnail?.source || json.originalimage?.source || null,
+    extract: json.extract && json.extract.trim() ? json.extract.trim() : null,
+  };
+}
+
+/**
+ * Wikidata の P18（画像）から Commons の直リンクを作る。
+ * Special:EntityData も CORS 許可済み。
+ */
+async function fetchWikidataImage(qid, signal) {
+  const url = `https://www.wikidata.org/wiki/Special:EntityData/${qid}.json`;
+  const json = await getJson(url, signal);
+  const file = json.entities?.[qid]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+  return file ? commonsFilePath(file) : null;
+}
+
+/** 一時的な失敗か（時間をおけば直る見込みがあるか） */
+function isTransient(err) {
+  if (!err) return false;
+  if (err.name === "TimeoutError") return true;
+  if (err.status === 429) return true;
+  if (typeof err.status === "number") return err.status >= 500;
+  return true; // 通信断などは一時的とみなす
+}
+
+/**
+ * スポットの写真と要約を取得する。
+ *
+ * - タグ由来の画像があれば API を叩かず即返す（source: "tag"）
+ * - wikipedia / wikidata のどちらも無いスポットは **リクエストを出さずに** 即返す
+ * - 失敗しても例外は投げず null を返す（写真は無くても致命的ではない）
+ * - 同じスポットは二度取りにいかない（失敗もキャッシュする）
+ *
+ * @param {object} spot fetchNearbySpots が返す spot
+ * @param {{signal?: AbortSignal}} [options]
+ * @returns {Promise<{imageUrl: string|null, extract: string|null, source: "tag"|"wikipedia"|null}>}
+ */
+export async function fetchSpotMedia(spot, { signal } = {}) {
+  if (!spot) return EMPTY_MEDIA;
+
+  // 1. タグから作れているならネットワークは使わない
+  if (spot.imageUrl) {
+    return { imageUrl: spot.imageUrl, extract: null, source: "tag" };
+  }
+
+  // 2. 参照先を決める（wikipediaTitle 優先、無ければ wikipediaUrl から復元）
+  const fromUrl = refFromWikipediaUrl(spot.wikipediaUrl);
+  const title = spot.wikipediaTitle || fromUrl?.title || null;
+  const lang = spot.wikipediaLang || fromUrl?.lang || "ja";
+  const qid = qidFromUrl(spot.wikipediaUrl);
+
+  // 手がかりが無いならリクエストを出さない
+  if (!title && !qid) return EMPTY_MEDIA;
+
+  // 3. キャッシュ（失敗もキャッシュして無限リトライを防ぐ）
+  const key = spot.id || `${lang}:${title || qid}`;
+  const hit = mediaCache.get(key);
+  if (hit && (!hit.retryAt || hit.retryAt > Date.now())) {
+    return { imageUrl: hit.imageUrl, extract: hit.extract, source: hit.source };
+  }
+
+  let result = EMPTY_MEDIA;
+  let err = null;
+
+  try {
+    if (title) {
+      const { imageUrl, extract } = await fetchWikipediaSummary(lang, title, signal);
+      result = { imageUrl, extract, source: imageUrl || extract ? "wikipedia" : null };
+    } else if (qid) {
+      const imageUrl = await fetchWikidataImage(qid, signal);
+      result = { imageUrl, extract: null, source: imageUrl ? "wikipedia" : null };
+    }
+  } catch (e) {
+    // ユーザー起因の中断だけは呼び出し側に伝える
+    if (signal && signal.aborted) throw e;
+    err = e;
+    result = EMPTY_MEDIA;
+  }
+
+  // 一時的な失敗は少し待って再挑戦できるようにする。
+  // 404（記事なし）や成功は恒久的な結果として覚える。
+  mediaCache.set(key, {
+    ...result,
+    ...(err && isTransient(err) ? { retryAt: Date.now() + MEDIA_RETRY_COOLDOWN_MS } : {}),
+  });
+
+  return result;
 }

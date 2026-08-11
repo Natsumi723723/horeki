@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import MapView from "./MapView.jsx";
-import { getWalk, getTrack, deleteWalk } from "./db.js";
+import { getWalk, getTrack, deleteWalk, checkinsForWalk } from "./db.js";
+import { CATEGORIES } from "./spots.js";
+import SpotImage from "./SpotImage.jsx";
 import {
   toSegments,
   boundsOf,
@@ -28,15 +30,19 @@ function Stat({ label, value }) {
 export default function WalkDetail({ walkId, onBack, onDeleted }) {
   const [walk, setWalk] = useState(null);
   const [points, setPoints] = useState([]);
+  const [visits, setVisits] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([getWalk(walkId), getTrack(walkId)]).then(([w, pts]) => {
-      if (!alive) return;
-      setWalk(w);
-      setPoints(pts);
-    });
+    Promise.all([getWalk(walkId), getTrack(walkId), checkinsForWalk(walkId)]).then(
+      ([w, pts, cs]) => {
+        if (!alive) return;
+        setWalk(w);
+        setPoints(pts);
+        setVisits(cs);
+      }
+    );
     return () => {
       alive = false;
     };
@@ -139,6 +145,68 @@ export default function WalkDetail({ walkId, onBack, onDeleted }) {
             />
           </div>
         </div>
+        {visits.length > 0 && (
+          <>
+            <div
+              style={{
+                fontFamily: "var(--font-serif)",
+                fontSize: 15,
+                letterSpacing: "0.08em",
+                margin: "22px 0 10px",
+              }}
+            >
+              この日訪れた場所
+              <span
+                style={{
+                  fontSize: 12,
+                  color: "var(--text-faint)",
+                  marginLeft: 8,
+                  letterSpacing: 0,
+                }}
+              >
+                {visits.length}か所
+              </span>
+            </div>
+            {visits.map((v) => (
+              <div className="card" key={v.id} style={{ padding: 12 }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  <SpotImage spot={v} size={64} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "var(--accent)",
+                        letterSpacing: "0.06em",
+                      }}
+                    >
+                      {formatTime(v.at)}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-serif)",
+                        fontSize: 16,
+                        fontWeight: 600,
+                        marginTop: 2,
+                      }}
+                    >
+                      {v.name}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "var(--text-faint)",
+                        marginTop: 2,
+                      }}
+                    >
+                      {CATEGORIES[v.category]?.icon} {CATEGORIES[v.category]?.label}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
         <p
           style={{
             fontSize: 12,

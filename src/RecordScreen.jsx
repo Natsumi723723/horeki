@@ -2,12 +2,35 @@
 
 import { useEffect, useState } from "react";
 import RouteThumb from "./RouteThumb.jsx";
-import { listWalks, getTrack } from "./db.js";
+import { listWalks, getTrack, clearDemoData } from "./db.js";
 import { formatDate, formatDistance, formatDuration, formatTime } from "./geo.js";
 
-export default function RecordScreen({ reloadKey, onOpen }) {
+export default function RecordScreen({ reloadKey, onOpen, onChanged }) {
   const [walks, setWalks] = useState(null);
   const [thumbs, setThumbs] = useState({});
+  const [busy, setBusy] = useState(false);
+
+  const seedDemo = async () => {
+    setBusy(true);
+    try {
+      // デモは普段使わないので、必要になったときだけ読み込む
+      const { seedDemoData } = await import("./demoData.js");
+      await seedDemoData();
+      onChanged?.();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeDemo = async () => {
+    setBusy(true);
+    try {
+      await clearDemoData();
+      onChanged?.();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -26,6 +49,8 @@ export default function RecordScreen({ reloadKey, onOpen }) {
     };
   }, [reloadKey]);
 
+  const hasDemo = !!walks?.some((w) => w.demo);
+
   if (walks === null) {
     return (
       <div className="scroll">
@@ -42,6 +67,31 @@ export default function RecordScreen({ reloadKey, onOpen }) {
         <p className="screen-sub">{walks.length} 件の街歩き</p>
       )}
 
+      {hasDemo && (
+        <div
+          className="banner"
+          style={{ marginBottom: 12, justifyContent: "space-between" }}
+        >
+          <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span>🎞</span>
+            <span>デモデータが入っています</span>
+          </span>
+          <button
+            onClick={removeDemo}
+            disabled={busy}
+            style={{
+              color: "var(--accent)",
+              fontSize: 13,
+              padding: "6px 4px",
+              minHeight: 32,
+              flex: "none",
+            }}
+          >
+            {busy ? "…" : "消す"}
+          </button>
+        </div>
+      )}
+
       {walks.length === 0 ? (
         <div className="empty">
           <span className="empty-mark">歩</span>
@@ -50,6 +100,28 @@ export default function RecordScreen({ reloadKey, onOpen }) {
           MAP から「歩き始める」を押すと、
           <br />
           ここに歩いた記録が残ります。
+          <div style={{ marginTop: 28 }}>
+            <button
+              className="btn btn-quiet"
+              onClick={seedDemo}
+              disabled={busy}
+              style={{ width: "100%" }}
+            >
+              {busy ? "作成中…" : "デモデータを入れて見てみる"}
+            </button>
+            <p
+              style={{
+                fontSize: 12,
+                color: "var(--text-faint)",
+                marginTop: 10,
+                lineHeight: 1.8,
+              }}
+            >
+              歩かなくても、記録・MY MAP・チェックインが
+              <br />
+              どう見えるか試せます。あとからまとめて消せます。
+            </p>
+          </div>
         </div>
       ) : (
         walks.map((w) => (
@@ -75,6 +147,21 @@ export default function RecordScreen({ reloadKey, onOpen }) {
                   }}
                 >
                   {formatDate(w.startedAt)}
+                  {w.demo && (
+                    <span
+                      style={{
+                        marginLeft: 8,
+                        fontSize: 10,
+                        letterSpacing: "0.1em",
+                        color: "var(--text-faint)",
+                        border: "1px solid var(--line-strong)",
+                        borderRadius: 4,
+                        padding: "1px 5px",
+                      }}
+                    >
+                      デモ
+                    </span>
+                  )}
                 </div>
                 <div
                   style={{

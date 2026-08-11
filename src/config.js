@@ -8,4 +8,7 @@ export const APP_TAGLINE = "歩いた道が、自分の地図になる";
 // IndexedDB の名前。**絶対に変更しないこと。**
 // 変えると既存ユーザーの歩行記録が読めなくなる。
 export const DB_NAME = "horeki";
-export const DB_VERSION = 1;
+// v2: チェックイン（checkins）ストアを追加。
+// バージョンを上げるときは db.js の upgrade を「追加のみ」にすること。
+// 既存ストアを作り直すと過去の歩行記録が消える。
+export const DB_VERSION = 2;

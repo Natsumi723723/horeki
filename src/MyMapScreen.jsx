@@ -3,19 +3,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import MapView from "./MapView.jsx";
-import { getAllTracks, getStats } from "./db.js";
+import { getAllTracks, getStats, listCheckins } from "./db.js";
+import { CATEGORIES } from "./spots.js";
 import { toSegments, boundsOf, splitDistance, formatDuration } from "./geo.js";
 
 export default function MyMapScreen({ reloadKey, current }) {
   const [tracks, setTracks] = useState(null);
   const [stats, setStats] = useState(null);
+  const [checkins, setCheckins] = useState([]);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([getAllTracks(), getStats()]).then(([ts, st]) => {
+    Promise.all([getAllTracks(), getStats(), listCheckins()]).then(([ts, st, cs]) => {
       if (!alive) return;
       setTracks(ts);
       setStats(st);
+      setCheckins(cs);
     });
     return () => {
       alive = false;
@@ -33,10 +36,27 @@ export default function MyMapScreen({ reloadKey, current }) {
     return out;
   }, [tracks]);
 
+  // 同じ場所に何度も行っていても、地図上のピンは1本にまとめる
+  const pins = useMemo(() => {
+    const seen = new Map();
+    for (const c of checkins) {
+      if (!seen.has(c.spotId)) {
+        seen.set(c.spotId, {
+          id: c.spotId,
+          name: c.name,
+          lat: c.lat,
+          lng: c.lng,
+          icon: CATEGORIES[c.category]?.icon || "📍",
+        });
+      }
+    }
+    return [...seen.values()];
+  }, [checkins]);
+
   const bounds = useMemo(() => {
-    const all = segments.flat();
+    const all = [...segments.flat(), ...pins];
     return all.length ? boundsOf(all) : null;
-  }, [segments]);
+  }, [segments, pins]);
 
   const dist = splitDistance(stats?.totalDistance || 0);
   const empty = stats && stats.count === 0;
@@ -45,6 +65,7 @@ export default function MyMapScreen({ reloadKey, current }) {
     <div className="map-root">
       <MapView
         segments={segments}
+        spots={pins}
         current={current}
         fitBounds={bounds}
         focus={!bounds && current ? { lat: current.lat, lng: current.lng, zoom: 14 } : null}
@@ -73,7 +94,9 @@ export default function MyMapScreen({ reloadKey, current }) {
             style={{
               display: "flex",
               alignItems: "flex-end",
-              gap: 20,
+              flexWrap: "wrap",
+              columnGap: 20,
+              rowGap: 10,
               marginTop: 8,
             }}
           >
@@ -128,6 +151,25 @@ export default function MyMapScreen({ reloadKey, current }) {
                 </span>
               </div>
             </div>
+            {pins.length > 0 && (
+              <div>
+                <div className="stat-label">訪れた場所</div>
+                <div>
+                  <span className="stat-value" style={{ fontSize: 22 }}>
+                    {pins.length}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      color: "var(--text-muted)",
+                      marginLeft: 2,
+                    }}
+                  >
+                    か所
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
           {stats?.totalDuration > 0 && (
             <div
