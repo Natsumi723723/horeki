@@ -4,6 +4,9 @@
 
 GPSで街歩きを記録するPWA。歩けば歩くほど、自分だけの街歩き地図ができていく。
 
+## 👉 https://natsumi723723.github.io/horeki/
+
+
 - 歩いた道をGPSで記録する
 - 過去の記録を地図で振り返る
 - 現在地まわりの史跡・寺社・文化施設を見つける
@@ -15,7 +18,7 @@ Androidアプリではなく **Webアプリ（PWA）** として作ってある�
 
 ## 使い方（渡された人向け）
 
-1. Androidの **Chrome** で URL を開く
+1. Androidの **Chrome** で https://natsumi723723.github.io/horeki/ を開く
 2. 位置情報を **「アプリの使用中のみ許可」** にする
 3. メニュー（︙）→ **「ホーム画面に追加」**
 4. ホーム画面のアイコンから起動する
@@ -137,27 +140,23 @@ npm run build
 
 **位置情報は https でしか動かない。** ローカルの `http://localhost` は例外的に動くが、`http://192.168.x.x` では動かない。友達に渡すなら https のホスティングが必須。
 
-初回のみ:
+**公開済み。** リポジトリは https://github.com/Natsumi723723/horeki （public）、
+公開先は https://natsumi723723.github.io/horeki/ 。Pages のソースは `gh-pages` ブランチ。
 
-```bash
-cd /Users/nachumin/horeki
-git init && git add -A && git commit -m "初回コミット"
-```
-
-GitHubでリポジトリを作ってから:
-
-```bash
-git remote add origin git@github.com:<アカウント名>/horeki.git
-git push -u origin main
-```
-
-デプロイ:
+更新したいときは、コードを直してから:
 
 ```bash
 npm run deploy
 ```
 
-`https://<アカウント名>.github.io/horeki/` で公開される。GitHub の Settings → Pages で Branch を `gh-pages` にすること。
+これだけ。`predeploy` でビルドされ、`gh-pages` ブランチに反映される。1〜2分でサイトに出る。
+ソースの履歴も残したいなら、あわせて `main` にも push すること:
+
+```bash
+git push origin main
+```
+
+Service Worker は `autoUpdate` 設定なので、次回起動時に必ず新しい版に入れ替わる（古い画面が残り続けることはない）。
 
 ---
 
