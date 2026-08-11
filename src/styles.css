@@ -1,0 +1,504 @@
+/* 歩歴 — 和モダン。墨・藍・生成り・茶。派手な原色とグラデーションは使わない。 */
+
+:root {
+  /* 基本色 */
+  --sumi: #252525;
+  --ai-dark: #243447;
+  --ai: #36566f;
+  --kinari: #f4f0e6;
+  --washi: #faf8f2;
+  --cha: #806044;
+  --haicha: #a99c8b;
+  --shu: #a64b3c;
+
+  /* 役割 */
+  --bg: var(--washi);
+  --surface: #ffffff;
+  --surface-2: var(--kinari);
+  --text: var(--sumi);
+  --text-muted: var(--cha);
+  --text-faint: var(--haicha);
+  --line: rgba(169, 156, 139, 0.38);
+  --line-strong: rgba(128, 96, 68, 0.32);
+  --primary: var(--ai-dark);
+  --primary-ink: #ffffff;
+  --accent: var(--shu);
+  --shadow: 0 2px 10px rgba(37, 37, 37, 0.08);
+  --shadow-lg: 0 6px 26px rgba(37, 37, 37, 0.14);
+
+  /* 地図上の線 */
+  --track: #36566f;
+  --track-live: #a64b3c;
+  --track-past: rgba(54, 86, 111, 0.55);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+  /* 見出しと数字は明朝。「高級な旅行ノート」の質感はここで出る */
+  --font-serif: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif JP",
+    "Times New Roman", serif;
+
+  --tile-filter: sepia(0.32) saturate(0.72) contrast(0.94) brightness(1.03)
+    hue-rotate(-6deg);
+
+  --tab-h: 62px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181a;
+    --surface: #202326;
+    --surface-2: #282c30;
+    --text: #eee9dd;
+    --text-muted: #b6a892;
+    --text-faint: #8b8073;
+    --line: rgba(169, 156, 139, 0.22);
+    --line-strong: rgba(169, 156, 139, 0.3);
+    --primary: #36566f;
+    --primary-ink: #f4f0e6;
+    --accent: #c4604d;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 6px 26px rgba(0, 0, 0, 0.5);
+    --track: #7ea6c4;
+    --track-live: #e0836d;
+    --track-past: rgba(126, 166, 196, 0.5);
+    --tile-filter: invert(0.92) hue-rotate(180deg) saturate(0.42) brightness(0.96)
+      contrast(0.88);
+  }
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  /* タップしたときに文字が選択されてしまうのを防ぐ */
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* ── アプリの骨格 ───────────────────────────────── */
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.screen {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.scroll {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px 16px calc(24px + var(--safe-b));
+}
+
+.screen-title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  margin: 4px 0 14px;
+}
+
+.screen-sub {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: -10px 0 16px;
+}
+
+/* ── 下部タブ ───────────────────────────────────── */
+.tabbar {
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding-bottom: var(--safe-b);
+  flex: none;
+}
+
+.tab {
+  flex: 1;
+  height: var(--tab-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--text-faint);
+  transition: color 0.15s;
+}
+
+.tab .tab-icon {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.tab .tab-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--primary);
+  position: relative;
+}
+
+@media (prefers-color-scheme: dark) {
+  .tab[aria-selected="true"] {
+    color: var(--text);
+  }
+}
+
+.tab[aria-selected="true"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 2px;
+  background: var(--accent);
+}
+
+/* ── 地図 ───────────────────────────────────────── */
+.map-root {
+  position: absolute;
+  inset: 0;
+  background: var(--surface-2);
+}
+
+.map-box {
+  width: 100%;
+  height: 100%;
+}
+
+/* 古地図・和紙の質感はタイルへのフィルタで出す（線の色は変えない） */
+.leaflet-tile-pane {
+  filter: var(--tile-filter);
+}
+
+.leaflet-container {
+  background: var(--surface-2);
+  font-family: var(--font-sans);
+}
+
+.leaflet-control-attribution {
+  background: rgba(250, 248, 242, 0.82) !important;
+  color: var(--text-faint) !important;
+  font-size: 10px !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--text-muted) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .leaflet-control-attribution {
+    background: rgba(22, 24, 26, 0.82) !important;
+  }
+}
+
+/* 現在地マーカー */
+.me-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--shu);
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(37, 37, 37, 0.25), 0 2px 6px rgba(37, 37, 37, 0.35);
+}
+
+.me-wrap {
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+
+.me-heading {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 11px solid var(--shu);
+  transform-origin: 50% 100%;
+  margin-left: -6px;
+  margin-top: -22px;
+}
+
+.spot-pin {
+  font-size: 20px;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* ── カード ─────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.card + .card {
+  margin-top: 12px;
+}
+
+.card-tap {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+}
+
+.card-tap:active {
+  transform: scale(0.995);
+}
+
+/* ── ボタン ─────────────────────────────────────── */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  border: 1px solid transparent;
+  transition: opacity 0.15s, transform 0.08s;
+}
+
+.btn:active {
+  transform: scale(0.985);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-quiet {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+.btn-lg {
+  min-height: 64px;
+  font-size: 19px;
+}
+
+.btn-sm {
+  min-height: 44px;
+  font-size: 15px;
+  padding: 0 14px;
+  border-radius: 10px;
+}
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-row > * {
+  flex: 1;
+}
+
+/* ── 数値表示 ───────────────────────────────────── */
+.stat-value {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+}
+
+/* ── 帯・通知 ───────────────────────────────────── */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+.banner-warn {
+  border-color: rgba(166, 75, 60, 0.45);
+  color: var(--accent);
+}
+
+.empty {
+  text-align: center;
+  color: var(--text-faint);
+  padding: 56px 24px;
+  font-size: 14px;
+  line-height: 2;
+}
+
+.empty-mark {
+  font-family: var(--font-serif);
+  font-size: 34px;
+  color: var(--line-strong);
+  display: block;
+  margin-bottom: 12px;
+}
+
+/* ── チップ（カテゴリ絞り込み） ─────────────────── */
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 12px;
+  scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+/* ── モーダル・シート ───────────────────────────── */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(37, 37, 37, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  padding-bottom: calc(16px + var(--safe-b));
+}
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 22px 20px;
+  box-shadow: var(--shadow-lg);
+}
+
+.sheet h3 {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  margin: 0 0 8px;
+  letter-spacing: 0.06em;
+}
+
+.sheet p {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+
+.divider {
+  height: 1px;
+  background: var(--line);
+  margin: 18px 0;
+}
+
+.spin {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
