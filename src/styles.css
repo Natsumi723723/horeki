@@ -213,6 +213,14 @@ button {
   font-family: var(--font-sans);
 }
 
+/* タッチ端末ではピンチで拡大できるので +/− は出さない。
+   画面上部のカードや通知と重なるほうが害が大きい。 */
+@media (pointer: coarse) {
+  .leaflet-control-zoom {
+    display: none;
+  }
+}
+
 .leaflet-control-attribution {
   background: rgba(250, 248, 242, 0.82) !important;
   color: var(--text-faint) !important;
